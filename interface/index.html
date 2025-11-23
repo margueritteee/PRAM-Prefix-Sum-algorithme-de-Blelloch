@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prefix Sum Calculator - CPGC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header Section -->
+        <div class="header-card">
+            <h1>🌸 Prefix Sum Calculator 🌸</h1>
+            <p class="description">
+                Calculez la somme préfixe d'un tableau en utilisant l'algorithme parallèle de Blelloch.
+                <br>
+                Le processus se déroule en deux phases principales :
+            </p>
+            <div class="steps">
+                <div class="step">
+                    <span class="step-icon">⬆️</span>
+                    <span>Up-Sweep (Somme Parallèle)</span>
+                </div>
+                <div class="step">
+                    <span class="step-icon">⬇️</span>
+                    <span>Down-Sweep (Calcul Préfixe)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="input-card">
+            <form method="post">
+                <div class="input-group-custom">
+                    <input 
+                        type="text" 
+                        class="custom-input" 
+                        name="numbers"
+                        placeholder="Entrez des nombres séparés par des virgules (ex: -1, 3, 7, -5, 3, 17, 8, 21)"
+                        value="{{ input_numbers }}">
+                    <button type="submit" class="calculate-btn">✨ Calculer ✨</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Up Tree Result (Arbre de Somme) -->
+        {% if up_tree %}
+        <div class="result-card">
+            <div class="section-title">
+                <span class="section-icon">⬆️</span>
+                <span>Phase 1 : Up-Sweep (Arbre de Somme Parallèle)</span>
+            </div>
+            <p class="tree-description">Construction de l'arbre montant : chaque niveau additionne les paires d'éléments du niveau inférieur.</p>
+            <div class="tree-container">
+                {% for level in up_tree|reverse %}
+                    <div class="tree-level">
+                        {% for node in level %}
+                            <div class="tree-node up-node">{{ node }}</div>
+                        {% endfor %}
+                    </div>
+                    {% if not loop.last %}
+                        <div class="tree-connector up-connector">↑</div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Down Tree Result (Arbre de Reconstruction) -->
+        {% if down_tree %}
+        <div class="result-card">
+            <div class="section-title">
+                <span class="section-icon">⬇️</span>
+                <span>Phase 2 : Down-Sweep (Arbre de Reconstruction)</span>
+            </div>
+            <p class="tree-description">Reconstruction descendante : à partir de la racine, calcul de <strong>gauche = parent - droite</strong> à chaque niveau.</p>
+            <div class="tree-container">
+                {% for level in down_tree %}
+                    <div class="tree-level">
+                        {% for node in level %}
+                            <div class="tree-node down-node">{{ node }}</div>
+                        {% endfor %}
+                    </div>
+                    {% if not loop.last %}
+                        <div class="tree-connector">↓</div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Final Result -->
+        {% if S %}
+        <div class="result-card final-card">
+            <div class="section-title">
+                <span class="section-icon">🎯</span>
+                <span>Résultat Final - Prefix Sum</span>
+            </div>
+            <div class="final-result">
+                <div class="result-label">Somme Préfixe :</div>
+                <div class="result-values">{{ S }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Explanation Card -->
+        {% if S %}
+        <div class="result-card explanation-card">
+            <div class="section-title">
+                <span class="section-icon">💡</span>
+                <span>Explication de l'Algorithme</span>
+            </div>
+            <div class="explanation-content">
+                <div class="explanation-step">
+                    <strong>1️⃣ Up-Sweep (Phase montante) :</strong>
+                    <p>On construit un arbre binaire en additionnant les paires d'éléments à chaque niveau jusqu'à obtenir la somme totale à la racine.</p>
+                </div>
+                <div class="explanation-step">
+                    <strong>2️⃣ Down-Sweep (Phase descendante) :</strong>
+                    <p>On part de la racine et on descend niveau par niveau. À chaque nœud, on applique : <code>gauche = parent - droite</code>.</p>
+                </div>
+                <div class="explanation-step">
+                    <strong>3️⃣ Résultat :</strong>
+                    <p>Le dernier niveau de l'arbre descendant contient la somme préfixe complète du tableau !</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>💖 Développé par Kezrane Margueritte 💖</p>
+            <p class="footer-subtitle">IAA • Module CPGC • Algorithme de Blelloch</p>
+        </div>
+    </div>
+</body>
+</html>
