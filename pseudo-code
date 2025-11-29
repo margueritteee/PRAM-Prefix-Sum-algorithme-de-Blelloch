@@ -1,138 +1,179 @@
-// UP : tableau construit par UP-SWEEP (avec tous les niveaux)
-// DOWN : tableau résultat du DOWN-SWEEP
-// n : taille du tableau original
 
-DÉBUT DOWN-SWEEP
+                     PSEUDO-CODE : PARALLEL PREFIX SUM                         
+                    (Algorithme de Blelloch - Implémentation)                 
 
-    // Initialiser DOWN avec des zéros
-    DOWN ← tableau de taille n initialisé à 0
+
+ALGORITHME: parallel_prefix_sum_prof(X)
+ENTRÉE: X = tableau de n éléments [x₁, x₂, ..., xₙ]
+SORTIE: (somme_prefixe, arbre_somme, arbre_recon)
+
+DÉBUT
+    n ← longueur(X)
     
-    // Mettre la racine (somme totale en haut)
-    DOWN[dernier_niveau] ← UP[dernier_niveau]
+    // Cas de base
+    SI n = 0 ALORS
+        RETOURNER ([], [], [])
+    FIN SI
     
-    // Descendre niveau par niveau (de log(n) vers 0)
-    for level = log(n)-1 downto 0 do
+    SI n = 1 ALORS
+        RETOURNER ([X[1]], [X], [X])
+    FIN SI
+    
+    // Calcul du nombre de workers (processeurs)
+    num_workers ← min(nombre_coeurs_CPU, max(n/2, 1))
+    
+    
+    
+     PHASE 1: UP-SWEEP (CONSTRUCTION ARBRE DE SOMME) - PARALLÈLE    
+    
+    arbre_somme ← [copie(X)]              // Niveau 0 (feuilles)
+    niveau_courant ← copie(X)
+    
+    TANT QUE longueur(niveau_courant) > 1 FAIRE
         
-        parent_level ← level + 1
-        nb_elements_parent ← n / 2^(parent_level)
+        // Préparer les arguments pour parallélisation
+        args ← []
+        POUR i ← 0 À longueur(niveau_courant) PAR PAS DE 2 FAIRE
+            ajouter (i, niveau_courant) à args
+        FIN POUR
         
-        // Traiter tous les parents EN PARALLÈLE
-        forall j = 0 to nb_elements_parent-1 do in parallel
+        // PARALLÉLISATION: Créer num_workers processus
+        CRÉER ProcessPoolExecutor AVEC num_workers workers
+        
+            // Chaque worker exécute calc_tree_pair en parallèle
+            POUR CHAQUE Pi, i ∈ {1...num_workers} FAIRE EN PARALLÈLE
+                // Pi traite un sous-ensemble de args
+                Pour chaque (j, niveau_courant) assigné à Pi:
+                    SI j+1 < longueur(niveau_courant) ALORS
+                        résultat_Pi ← niveau_courant[j] + niveau_courant[j+1]
+                    SINON
+                        résultat_Pi ← niveau_courant[j]
+                    FIN SI
+            FIN POUR EN PARALLÈLE
             
-            parent_val ← DOWN[parent_level][j]
-            pos_in_child ← j * 2  // Position des enfants
+            // Collecter tous les résultats
+            niveau_suivant ← [résultats de tous les workers]
+        
+        FERMER ProcessPoolExecutor
+        
+        ajouter niveau_suivant à arbre_somme
+        niveau_courant ← niveau_suivant
+    FIN TANT QUE
+    
+    // À ce stade: arbre_somme contient tous les niveaux
+    // Exemple pour X = [2, 3, -1, 5]:
+    //   arbre_somme[0] = [2, 3, -1, 5]    (feuilles)
+    //   arbre_somme[1] = [5, 4]           (niveau 1)
+    //   arbre_somme[2] = [9]              (racine = somme totale)
+    
+    
+    
+      PHASE 2: DOWN-SWEEP (RECONSTRUCTION) - PARALLÈLE                 
+    
+    
+    arbre_recon ← []
+    niveau_courant ← [arbre_somme[dernier][1]]    // Racine (somme totale)
+    ajouter niveau_courant à arbre_recon
+    
+    // Descendre niveau par niveau (de haut en bas)
+    POUR depth ← longueur(arbre_somme) - 2 JUSQUÀ 0 PAR PAS DE -1 FAIRE
+        
+        niveau_somme ← arbre_somme[depth]    // Niveau correspondant dans up-tree
+        
+        // Préparer les arguments pour parallélisation
+        args ← []
+        POUR i ← 0 À longueur(niveau_courant) - 1 FAIRE
+            ajouter (i, niveau_courant, niveau_somme) à args
+        FIN POUR
+        
+        // PARALLÉLISATION: Créer num_workers processus
+        CRÉER ProcessPoolExecutor AVEC num_workers workers
+        
+            // Chaque worker exécute calc_down_sweep_pair en parallèle
+            POUR CHAQUE Pi, i ∈ {1...num_workers} FAIRE EN PARALLÈLE
+                // Pi traite un sous-ensemble de args
+                Pour chaque (j, niveau_courant, niveau_somme) assigné à Pi:
+                    pos ← j × 2
+                    parent_val ← niveau_courant[j]
+                    
+                    SI pos+1 < longueur(niveau_somme) ALORS
+                        // Formule: gauche = parent - droite
+                        gauche ← parent_val - niveau_somme[pos+1]
+                        droite ← parent_val
+                        résultat_Pi ← [gauche, droite]
+                    SINON
+                        résultat_Pi ← [parent_val]
+                    FIN SI
+            FIN POUR EN PARALLÈLE
             
-            SI pos_in_child + 1 < longueur(UP[level]) ALORS
-                // Formule : gauche = parent - droite_de_UP
-                RIGHT_from_UP ← UP[level][pos_in_child + 1]
-                
-                DOWN[level][pos_in_child] ← parent_val - RIGHT_from_UP
-                DOWN[level][pos_in_child + 1] ← parent_val
-            SINON
-                // Élément seul (impair)
-                DOWN[level][pos_in_child] ← parent_val
-            FIN SI
-            
-        end forall
+            // Collecter et aplatir tous les résultats
+            resultats ← [résultats de tous les workers]
+            niveau_suivant ← aplatir(resultats)  // [[g1,d1], [g2,d2]] → [g1,d1,g2,d2]
         
-    end for
-    
-    // DOWN[0] contient le PREFIX SUM final !
-    RETOURNER DOWN[0]
-
-FIN DOWN-SWEEP
-Exemple détaillé : x = [-1, 3, 7, -5, 3, 17, 8, 21]
-UP[3] = [53]                    ← Niveau 3 (racine)
-UP[2] = [4, 49]                 ← Niveau 2
-UP[1] = [2, 2, 20, 29]          ← Niveau 1  
-UP[0] = [-1, 3, 7, -5, 3, 17, 8, 21]  ← Niveau 0 (feuilles)
-═══════════════════════════════════════════════════════════
-INITIALISATION
-DOWN[3] ← UP[3] = [53]
-
-═══════════════════════════════════════════════════════════
-LEVEL = 2 (parent_level = 3, nb_parents = 1)
-
-forall j = 0 do in parallel  ← 1 processeur P₀
-    
-    Processeur P₀ (j=0):
-        parent = DOWN[3][0] = 53
-        pos = 0 * 2 = 0
-        RIGHT_from_UP = UP[2][0+1] = UP[2][1] = 49
+        FERMER ProcessPoolExecutor
         
-        DOWN[2][0] ← 53 - 49 = 4
-        DOWN[2][1] ← 53
-
-Résultat: DOWN[2] = [4, 53]
-
-═══════════════════════════════════════════════════════════
-LEVEL = 1 (parent_level = 2, nb_parents = 2)
-
-forall j = 0 to 1 do in parallel  ← 2 processeurs P₀, P₁
-
-    Processeur P₀ (j=0):
-        parent = DOWN[2][0] = 4
-        pos = 0 * 2 = 0
-        RIGHT_from_UP = UP[1][0+1] = UP[1][1] = 2
-        
-        DOWN[1][0] ← 4 - 2 = 2
-        DOWN[1][1] ← 4
+        ajouter niveau_suivant à arbre_recon
+        niveau_courant ← niveau_suivant
+    FIN POUR
     
-    Processeur P₁ (j=1):
-        parent = DOWN[2][1] = 53
-        pos = 1 * 2 = 2
-        RIGHT_from_UP = UP[1][2+1] = UP[1][3] = 29
-        
-        DOWN[1][2] ← 53 - 29 = 24
-        DOWN[1][3] ← 53
-
-Résultat: DOWN[1] = [2, 4, 24, 53]
-
-═══════════════════════════════════════════════════════════
-LEVEL = 0 (parent_level = 1, nb_parents = 4)
-
-forall j = 0 to 3 do in parallel  ← 4 processeurs P₀, P₁, P₂, P₃
-
-    Processeur P₀ (j=0):
-        parent = DOWN[1][0] = 2
-        RIGHT_from_UP = UP[0][1] = 3
-        DOWN[0][0] ← 2 - 3 = -1
-        DOWN[0][1] ← 2
+    // Le dernier niveau contient le prefix sum final !
+    somme_prefixe ← niveau_suivant
     
-    Processeur P₁ (j=1):
-        parent = DOWN[1][1] = 4
-        RIGHT_from_UP = UP[0][3] = -5
-        DOWN[0][2] ← 4 - (-5) = 9
-        DOWN[0][3] ← 4
-    
-    Processeur P₂ (j=2):
-        parent = DOWN[1][2] = 24
-        RIGHT_from_UP = UP[0][5] = 17
-        DOWN[0][4] ← 24 - 17 = 7
-        DOWN[0][5] ← 24
-    
-    Processeur P₃ (j=3):
-        parent = DOWN[1][3] = 53
-        RIGHT_from_UP = UP[0][7] = 21
-        DOWN[0][6] ← 53 - 21 = 32
-        DOWN[0][7] ← 53
+    RETOURNER (somme_prefixe, arbre_somme, arbre_recon)
+FIN
 
-Résultat FINAL: DOWN[0] = [-1, 2, 9, 4, 7, 24, 32, 53]
-                           ↑  ↑  ↑  ↑  ↑  ↑   ↑   ↑
-                          P₀ P₀ P₁ P₁ P₂ P₂  P₃  P₃
-                          
-CEST LE PREFIX SUM 
 
-Niveau 0:            [53]
-                    ↙    ↘
-                53-49=4   53
-Niveau 1:         [4,    53]
-                 ↙  ↘   ↙   ↘
-            4-2=2  4  53-29=24  53
-Niveau 2:      [2,  4,  24,  53]
-              ↙ ↘ ↙ ↘  ↙  ↘  ↙  ↘
-        2-3=-1 2 4-(-5)=9 4 24-17=7 24 53-21=32 53
-Niveau 3: [-1, 2, 9, 4, 7, 24, 32, 53]  ← PREFIX SUM !
 
--Complexité :
-Temps : O(log n) avec n processeurs 
+                         ANALYSE DE COMPLEXITÉ                                
+
+
+COMPLEXITÉ EN TEMPS:
+  • Séquentiel: O(n)
+  • Parallèle avec p processeurs: O((n/p) × log n)
+  • Profondeur: O(log n) niveaux
+  • Chaque niveau: O(n/p) temps avec p workers
+  
+COMPLEXITÉ EN ESPACE:
+  • arbre_somme: n + n/2 + n/4 + ... + 1 ≈ 2n éléments
+  • arbre_recon: 1 + 2 + 4 + ... + n ≈ 2n éléments
+  • Total: O(n) espace
+
+PARALLÉLISME:
+  • UP-SWEEP: Chaque niveau traité en parallèle
+  • DOWN-SWEEP: Chaque niveau traité en parallèle
+  • Nombre de workers: min(nombre_coeurs, n/2)
+
+
+
+                    EXEMPLE DEXÉCUTION PARALLÈLE                            
+
+
+Entrée: X = [2, 3, -1, 5]
+Nombre de workers: 2 (par exemple)
+
+--- UP-SWEEP ---
+Niveau 0: [2, 3, -1, 5]
+  ↓ (Parallèle avec 2 workers)
+  Worker 1 calcule: 2 + 3 = 5
+  Worker 2 calcule: -1 + 5 = 4
+Niveau 1: [5, 4]
+  ↓ (Parallèle avec 1 worker)
+  Worker 1 calcule: 5 + 4 = 9
+Niveau 2: [9]  ← Racine (somme totale)
+
+--- DOWN-SWEEP ---
+Niveau 0: [9]
+  ↓ (Parallèle avec 1 worker)
+  Worker 1: gauche = 9 - 4 = 5, droite = 9
+Niveau 1: [5, 9]
+  ↓ (Parallèle avec 2 workers)
+  Worker 1: gauche = 5 - 3 = 2, droite = 5
+  Worker 2: gauche = 9 - 5 = 4, droite = 9
+Niveau 2: [2, 5, 4, 9]  ← PREFIX SUM !
+
+Résultat: [2, 5, 4, 9]
+Vérification: 
+  [2] = 2
+  [2, 3] = 5
+  [2, 3, -1] = 4
+  [2, 3, -1, 5] = 9  ✓

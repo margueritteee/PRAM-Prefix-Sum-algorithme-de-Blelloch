@@ -47,6 +47,81 @@
             </form>
         </div>
 
+        <!-- Error Message Section -->
+        {% if error_message %}
+        <div class="result-card" style="border: 2px solid #ff6b6b; background: #ffe0e0;">
+            <div class="section-title" style="color: #d32f2f;">
+                <span class="section-icon">⚠️</span>
+                <span>{{ error_message }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Complexity Analysis Section -->
+        {% if complexity %}
+        <div class="result-card complexity-card">
+            <div class="section-title">
+                <span class="section-icon">📊</span>
+                <span>Analyse de Complexité</span>
+            </div>
+            <div class="complexity-grid">
+                <!-- Section Temps -->
+                <div class="complexity-section">
+                    <div class="complexity-header">⏱️ Complexité en Temps</div>
+                    <div class="complexity-metrics">
+                        <div class="metric-item">
+                            <span class="metric-label">Temps d'exécution :</span>
+                            <span class="metric-value">{{ "%.3f"|format(complexity.temps_execution_ms) }} ms</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Workers utilisés :</span>
+                            <span class="metric-value">{{ complexity.nombre_workers }} cœurs</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Profondeur arbre :</span>
+                            <span class="metric-value">{{ complexity.profondeur_arbre }} niveaux</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Complexité :</span>
+                            <span class="metric-value-formula">{{ complexity.complexite_temps }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section Espace -->
+                <div class="complexity-section">
+                    <div class="complexity-header">💾 Complexité en Espace</div>
+                    <div class="complexity-metrics">
+                        <div class="metric-item">
+                            <span class="metric-label">Mémoire mesurée :</span>
+                            <span class="metric-value">{{ complexity.memoire_mesuree_mb }} MB</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Éléments stockés :</span>
+                            <span class="metric-value">{{ complexity.nombre_elements_stockes }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Up-tree :</span>
+                            <span class="metric-value-small">{{ complexity.elements_arbre_somme }} éléments</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Down-tree :</span>
+                            <span class="metric-value-small">{{ complexity.elements_arbre_recon }} éléments</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Complexité :</span>
+                            <span class="metric-value-formula">{{ complexity.complexite_espace }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Formule :</span>
+                            <span class="metric-value-small">{{ complexity.formule_espace }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Up Tree Result (Arbre de Somme) -->
         {% if up_tree %}
         <div class="result-card">
